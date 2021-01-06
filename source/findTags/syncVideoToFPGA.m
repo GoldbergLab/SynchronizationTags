@@ -145,28 +145,21 @@ syncList = struct('file', {}, 'matches', {});
 for k = 1:length(baseTags)
     baseTag = baseTags(k);
     baseTagID = baseTag.data;
+    % Select the matchTag that matches the base tag ID
     matchTag = matchTags([matchTags.data] == baseTagID);
 
     if ~isempty(matchTag)
         % We found a match for this tag
         baseIdx = find(strcmp({syncList.file}, baseTag.file), 1);
         if isempty(baseIdx)
+            % This is a new base file - haven't encountered it yet.
             baseIdx = length(syncList)+1;
             syncList(baseIdx).matches = [];
         end
     
+        % Get all matches so far, so we can potentially add to it
         matches = syncList(baseIdx).matches;
-        
-        % Calculate stats on match
-        baseTagFileTagData = getTagData(baseTag.file, allTagData);
-        matchedTagFileTagData = getTagData(matchTag.file, allTagData);
-
-        [baseOverlap, matchOverlap] = overlapSegments(...
-            [1, length(baseTagFileTagData)], ...
-            [1, length(matchedTagFileTagData)], ...
-            [baseTag.start, baseTag.end], ...
-            [matchTag.start, matchTag.end]);
-
+        % Prepare to add new match data
         if isempty(matches)
             % No matches yet. This'll be the first.
             matchIdx = 1;
@@ -177,12 +170,22 @@ for k = 1:length(baseTags)
             if isempty(matchIdx)
                 % First time matching this file - add it to the end.
                 fileAlreadyMatched = false;
-                matchIdx = length(matches);
+                matchIdx = length(matches)+1;
             else
                 % This file has been matched before (with other tags)
                 fileAlreadyMatched = true;
             end
         end
+        
+        % Calculate alignment info for match
+        baseTagFileTagData = getTagData(baseTag.file, allTagData);
+        matchedTagFileTagData = getTagData(matchTag.file, allTagData);
+
+        [baseOverlap, matchOverlap] = overlapSegments(...
+            [1, length(baseTagFileTagData)], ...
+            [1, length(matchedTagFileTagData)], ...
+            [baseTag.start, baseTag.end], ...
+            [matchTag.start, matchTag.end]);
         
         if fileAlreadyMatched
             if ~all(matches(matchIdx).baseOverlap == baseOverlap) || ...
@@ -191,6 +194,7 @@ for k = 1:length(baseTags)
             end
         end
         
+        % Add new match info
         matches(matchIdx).baseFile = baseTag.file;
         matches(matchIdx).matchFile = matchTag.file;
         matches(matchIdx).baseOverlap = baseOverlap;
