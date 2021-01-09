@@ -1,4 +1,4 @@
-function tags = findTags(tagData, nBits, nTags)
+function tags = findTags(tagData, nBits, nTags, fileStartOffset)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % findTags: find binary synchronization tags in a vector of digital data.
 % usage:  tags = tagData(tagData[, nTags])
@@ -10,12 +10,16 @@ function tags = findTags(tagData, nBits, nTags)
 %       index of the tag (falling edge of the end marker).
 %    tagData is a 1D vector of tag data. It can be logical, or any type
 %       that can evaluate to logical.
-%    nTag is an optional number describing the maximum # of tags to find.
-%       If omitted, all tags are found.
 %    nBits is an optional number of bits to expect in the tag data.
 %       Providing this can improve reliability of tag IDs where there is 
-%       the possibility of missing chunks of data. If omitted, tags with 
-%       any number of bits are identified without generating an error.
+%       the possibility of missing chunks of data. If omitted, or set to 
+%       NaN (default), tags with any number of bits are identified without 
+%       generating an error.
+%    nTags is an optional number describing the maximum # of tags to find.
+%       If omitted, or set to Inf (default), all tags are found.
+%    fileStartOffset is an optional parameter indicating how much the data
+%       has been shifted by pre-file data (to account for sub-tag file 
+%       overlaps) without affecting the output indices. Default is 0.
 %
 % Synchronizing two data streams requires a reference signal that is 
 %   is present in both streams, and is either identical, or at least has
@@ -99,6 +103,9 @@ end
 if ~exist('nTags', 'var')
     nTags = Inf;
 end
+if ~exist('fileStartOffset', 'var')
+    fileStartOffset = 0;
+end
 
 %% Prepare
 % Initialize output tags structure
@@ -173,6 +180,13 @@ else
     badMarkerIdx = find(badPw1s);
 end
 
+if ~isempty(badPulseIdx)
+    fprintf('Warning, %d non-standard-width pulses found!\n', length(badPulseIdx));
+end
+if ~isempty(badMarkerIdx)
+    fprintf('Warning, %d non-standard-width markers found!\n', length(badMarkerIdx));
+end
+
 %% Check for bad data
 % Make sure marker and pulse lengths are stereotyped and widely separated
 if tagStruct.pulseWidth + tagStruct.pulseStd > tagStruct.markerWidth - tagStruct.markerStd
@@ -197,10 +211,10 @@ markerIdx = find(pulseTypeIdx == tagStruct.markerId);
 for k = 1:length(markerIdx)-1
     markerIdx1 = markerIdx(k);
     markerIdx2 = markerIdx(k+1);
-    if any(markerIdx1 == badMarkerIdx) || any(markerIdx2 == badMarkerIdx)
-        disp('Bad marker!')
-        continue;
-    end
+%     if any(markerIdx1 == badMarkerIdx) || any(markerIdx2 == badMarkerIdx)
+%         disp('Bad marker!')
+%         continue;
+%     end
     firstDataPulseIdx = markerIdx1+1;
     lastDataPulseIdx = markerIdx2-1;
     if firstDataPulseIdx > lastDataPulseIdx
@@ -213,10 +227,10 @@ for k = 1:length(markerIdx)-1
         continue;
     end
     dataPulseIdx = (markerIdx1+1):(markerIdx2-1);
-    if ~isempty(intersect(dataPulseIdx, badPulseIdx))
-        disp('Tag contains a bad pulse - skip it.');
-        continue;
-    end
+%     if ~isempty(intersect(dataPulseIdx, badPulseIdx))
+%         disp('Tag contains a bad pulse - skip it.');
+%         continue;
+%     end
     try
         dataStart = fallingEdgeTimes(markerIdx1) + tagStruct.pulseWidth+1;
         dataEnd = risingEdgeTimes(markerIdx2) - tagStruct.pulseWidth;
@@ -248,6 +262,12 @@ for k = 1:length(markerIdx)-1
     catch me
         disp(getReport(me));
     end
+end
+
+%% Loop over tags and adjust for fileStartIndex
+for k = 1:length(tags)
+    tags(k).start = tags(k).start - fileStartOffset;
+    tags(k).end = tags(k).end - fileStartOffset;
 end
 
 end

@@ -1,8 +1,8 @@
-function syncList = syncVideoToFPGA(videoRootDir, fpgaRootDir, matchDirection, deduplicate, nBits)
+function syncList = syncVideoToFPGA(videoRootDir, fpgaRootDir, matchDirection, nBits)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % syncVideoToFPGA: Create a synchronization list to match FPGA and video files together.
 % usage:  syncList = syncVideoToFPGA(videoRootDir, fpgaRootDir, 
-%                                       matchDirection, deduplicate, nBits)
+%                                       matchDirection, nBits)
 %
 % where,
 %    syncList is a struct array, one element for each "match from" file
@@ -16,9 +16,6 @@ function syncList = syncVideoToFPGA(videoRootDir, fpgaRootDir, matchDirection, d
 %    matchDirection is an optional char array indicating whether to match video to FPGA
 %       or FPGA to video. One of {'FPGAToVideo', 'VideoToFPGA'}. Default is
 %       'VideoToFPGA'
-%    deduplicate is an optional boolean flag to attempt to de-duplicate
-%       repeated tags based on the alphabetical file order. Not
-%       recommended.
 %    nBits is an optional # of bits to expect in the tags, which can
 %       increase reliability of tag Ids. Default is NaN, meaning any # of
 %       bits will be allowed.
@@ -42,9 +39,6 @@ function syncList = syncVideoToFPGA(videoRootDir, fpgaRootDir, matchDirection, d
 if ~exist('matchDirection', 'var')
     matchDirection = 'VideoToFPGA';    
 end
-if ~exist('deduplicate', 'var')
-    deduplicate = false;
-end
 if ~exist('nBits', 'var')
     nBits = NaN;
 end
@@ -58,37 +52,37 @@ fprintf('...done. Found %d .dat files.\n', length(datFiles));
 fprintf('Finding video .xml files...\n');
 xmlFiles = findFilesByRegex(videoRootDir, '.*\.[xX][mM][lL]', false, false);
 fprintf('...done. Found %d .xml files.\n', length(xmlFiles));
-datAndXmlFiles = [datFiles, xmlFiles];
 
-tags = struct('data', {}, 'start', {}, 'end', {}, 'file', {});
 fprintf('\n');
-fprintf('Finding tags in data...\n');
+fprintf('Extracting tag data from files...\n');
 warning('off', 'MATLAB:table:ModifiedAndSavedVarnames');
-allTagData = struct('file', {}, 'tagData', {});
-for k = 1:length(datAndXmlFiles)
-    file = datAndXmlFiles{k};
+%% Loop through DAT files and extract tag data
+datTagData = struct('file', {}, 'tagData', {});
+for k = 1:length(datFiles)
+    file = datFiles{k};
     [~, name, ext] = fileparts(file);
-    fprintf('   Finding tags for %s...\n', [name, ext]);
-    switch lower(ext)
-        case '.dat'
-            [newTags, tagData] = findFPGATags(file, 'CameraTimestamp', nBits);
-        case '.xml'
-            [newTags, tagData] = findVideoTags(file, nBits);
-    end
-    allTagDataIdx = length(allTagData)+1;
-    allTagData(allTagDataIdx).file = file;
-    allTagData(allTagDataIdx).tagData = tagData;
-    
-    fprintf('   ...done. Found %d tags\n', length(newTags));
-    fileField = repmat({file}, [1, length(newTags)]);
-    [newTags.file] = fileField{:};
-    tags = [tags, newTags];
+    tagData = findFPGATagData(file, 'CameraTimestamp');
+    tagDataIdx = length(datTagData)+1;
+    datTagData(tagDataIdx).file = file;
+    datTagData(tagDataIdx).tagData = tagData;
+end
+%% Loop through XML files and extract tag data
+xmlTagData = struct('file', {}, 'tagData', {});
+for k = 1:length(xmlFiles)
+    file = xmlFiles{k};
+    [~, name, ext] = fileparts(file);
+    tagData = findVideoTagData(file);
+    tagDataIdx = length(xmlTagData)+1;
+    xmlTagData(tagDataIdx).file = file;
+    xmlTagData(tagDataIdx).tagData = tagData;
 end
 warning('on', 'MATLAB:table:ModifiedAndSavedVarnames');
-fprintf('...done finding tags in data.\n');
+fprintf('...done extracting tag data from files.\n');
 
-datTags = tags(strcmp(cellfun(@getExtension, {tags.file}, 'UniformOutput', false), '.dat'));
-xmlTags = tags(strcmp(cellfun(@getExtension, {tags.file}, 'UniformOutput', false), '.xml'));
+%% Extract tags from tag data
+datTags = extractTagsFromDataset(datTagData);
+xmlTags = extractTagsFromDataset(xmlTagData);
+
 datTagIDs = [datTags.data];
 xmlTagIDs = [xmlTags.data];
 fprintf('\n');
@@ -98,65 +92,40 @@ fprintf('Tags found in .xml files:\n')
 disp(xmlTagIDs)
 fprintf('\n')
 
-disp('Checking for duplicated tags...')
-duplicatedDatTagIDs = length(datTagIDs) - length(unique(datTagIDs));
-if duplicatedDatTagIDs > 0
-    msg = sprintf('%d duplicate tag IDs in fpga dat files! Make sure you only run this function on one "run" of data at a time. Exiting.', duplicatedDatTagIDs);
-    if deduplicate
-        disp(msg);
-        fprintf('\tAttempting to deduplicate...\n');
-        datTagIDs = deduplicateTagIds(datTagIDs)
-        fprintf('\t...done\n');
-    else
-        disp(msg);
-        datTag
-        error(msg);
-    end
-end
-
-duplicatedXmlTagIDs = length(xmlTagIDs) - length(unique(xmlTagIDs));
-if duplicatedXmlTagIDs > 0
-    msg = sprintf('%d duplicate tag IDs in video xml files! Make sure you only run this function on one "run" of data at a time..', duplicatedXmlTagIDs);
-    if deduplicate
-        disp(msg);
-        fprintf('\tAttempting to deduplicate...\n');
-        xmlTagIDs = deduplicateTagIds(xmlTagIDs)
-        fprintf('\t...done\n');
-    else
-        error(msg);
-    end
-end
-disp('...done')
-
-fprintf('\n');
-
 if strcmp(matchDirection, 'VideoToFPGA')
     baseTags = datTags;
     matchTags = xmlTags;
+    baseTagData = datTagData;
+    matchTagData = xmlTagData;
 elseif strcmp(matchDirection, 'FPGAToVideo')
     baseTags = xmlTags;
     matchTags = datTags;
+    baseTagData = xmlTagData;
+    matchTagData = datTagData;
+    
 else
     fprintf('Invalid match direction: %s', matchDirection);
     return;
 end
 
+%% Construct synchronization mapping between files (syncList)
 syncList = struct('file', {}, 'matches', {});
 for k = 1:length(baseTags)
     baseTag = baseTags(k);
     baseTagID = baseTag.data;
-    % Select the matchTag that matches the base tag ID
-    matchTag = matchTags([matchTags.data] == baseTagID);
-
-    if ~isempty(matchTag)
-        % We found a match for this tag
-        baseIdx = find(strcmp({syncList.file}, baseTag.file), 1);
-        if isempty(baseIdx)
-            % This is a new base file - haven't encountered it yet.
-            baseIdx = length(syncList)+1;
-            syncList(baseIdx).matches = [];
-        end
+    % Have we found matches for this tag before?
+    baseIdx = find(strcmp({syncList.file}, baseTag.file), 1);
+    if isempty(baseIdx)
+        % This is a new base file - haven't encountered it yet.
+        baseIdx = length(syncList)+1;
+        syncList(baseIdx).matches = [];
+    end
     
+    % Select the matchTag that matches the base tag ID
+    matchTagsSelected = matchTags([matchTags.data] == baseTagID);
+
+    for j = 1:length(matchTagsSelected)
+        matchTag = matchTagsSelected(j);
         % Get all matches so far, so we can potentially add to it
         matches = syncList(baseIdx).matches;
         % Prepare to add new match data
@@ -178,8 +147,8 @@ for k = 1:length(baseTags)
         end
         
         % Calculate alignment info for match
-        baseTagFileTagData = getTagData(baseTag.file, allTagData);
-        matchedTagFileTagData = getTagData(matchTag.file, allTagData);
+        baseTagFileTagData = getTagData(baseTag.file, baseTagData);
+        matchedTagFileTagData = getTagData(matchTag.file, matchTagData);
 
         [baseOverlap, matchOverlap] = overlapSegments(...
             [1, length(baseTagFileTagData)], ...
@@ -207,21 +176,87 @@ for k = 1:length(baseTags)
 end
 
 for k = 1:length(syncList)
-    plotMatches(syncList(k), allTagData);
+    plotMatches(syncList(k), baseTagData, matchTagData, baseTags, matchTags);
 end
 
-function plotMatches(syncElement, allTagData)
+function tags = extractTagsFromDataset(tagDataSet)
+% Takes a set of tagData from possibly consecutive files, and extracts all
+% tags.
+tags = struct('data', {}, 'start', {}, 'end', {}, 'file', {}, 'fileLength', {});
+
+for k = 1:length(tagDataSet)
+    file = tagDataSet(k).file;
+    [~, name, ext] = fileparts(file);
+    fprintf('   Finding tags for %s...\n', [name, ext]);
+    % Combine previous file, this file, and next file, and find tags (this
+    %   catches sub-tag-length file overlaps
+    if k == 1
+        preTagData = [];
+    else
+        preTagData = tagDataSet(k-1).tagData;
+    end
+    if k == length(tagDataSet)
+        postTagData = [];
+    else
+        postTagData = tagDataSet(k+1).tagData;
+    end
+    extendedTagData = [preTagData, tagDataSet(k).tagData, postTagData];
+    newTagsExtended = findTags(extendedTagData, NaN, Inf, length(preTagData));
+
+    % Filter out tags that aren't actually in this file:
+    newTags = struct('data', {}, 'start', {}, 'end', {});
+    for j = 1:length(newTagsExtended)
+        if tagInFile(newTagsExtended(j), length(tagDataSet(k).tagData))
+            newTags(end+1) = newTagsExtended(j);
+        end
+    end
+    fprintf('   ...done. Found %d tags\n', length(newTags));
+    fileField = repmat({file}, [1, length(newTags)]);
+    [newTags.file] = fileField{:};
+    fileLengthField = repmat({length(tagDataSet(k).tagData)}, [1, length(newTags)]);
+    [newTags.fileLength] = fileLengthField{:};
+    tags = [tags, newTags];
+end
+
+disp('Checking for duplicated tags...')
+[duplicateTags, ~] = getCounts(tags, @(t)t, @areTagsDuplicates);
+if duplicateTags > 0
+    msg = sprintf('%s duplicate tag IDs in fpga dat files! Make sure you only run this function on one "run" of data at a time. Exiting.', num2str([duplicateTags.data]));
+    error(msg);
+end
+
+function duplicate = areTagsDuplicates(t1, t2)
+% Check if two tags are duplicates
+sameID = (t1.data == t2.data);
+sameFilename = strcmp(t1.file, t2.file);
+notMatchingPartialTags = ~(t1.start < 1 && t2.end > t2.fileLength || t2.start < 1 && t1.end > t1.fileLength);
+duplicate = sameID && (sameFilename || notMatchingPartialTags);
+
+function tif = tagInFile(tag, fileSize)
+% Determine if the tag is at least partially in the file or not
+tif = ~isempty(overlapSegments([tag.start, tag.end], [1, fileSize]));
+
+function plotMatches(syncElement, baseTagDataSet, matchTagDataSet, baseTagSet, matchTagSet)
 % Plot matches:
-baseTagData = getTagData(syncElement.file, allTagData);
+baseTagData = getTagData(syncElement.file, baseTagDataSet);
+baseTags = baseTagSet(strcmp({baseTagSet.file}, syncElement.file));
 [~, name, ext] = fileparts(syncElement.file);
 f = figure;
 ax = axes(f);
 plot(ax, 1:length(baseTagData), baseTagData, 'DisplayName', [name, ext]);
 hold(ax, 'on');
+% Plot tag IDs
+for k = 1:length(baseTags)
+    text(ax, (baseTags(k).start + baseTags(k).end)/2, 0.5, num2str(baseTags(k).data),'HorizontalAlignment','center')
+end
+
+xDisplayRange = [min([baseTags.start, 1]), max([baseTags.end, length(baseTagData)])];
+
 nMatch = length(syncElement.matches);
 for k = 1:nMatch
     matchElement = syncElement.matches(k);
-    matchTagData = getTagData(matchElement.matchFile, allTagData);
+    matchTagData = getTagData(matchElement.matchFile, matchTagDataSet);
+    matchTags = matchTagSet(strcmp({matchTagSet.file}, matchElement.matchFile));
     matchOverlapIdx = matchElement.matchOverlap(1):matchElement.matchOverlap(2);
     baseOverlapIdx = linspace(matchElement.baseOverlap(1), matchElement.baseOverlap(2), length(matchOverlapIdx));
     [~, name, ext] = fileparts(matchElement.matchFile);
@@ -230,9 +265,61 @@ for k = 1:nMatch
 %         [matchElement.baseOverlap(1), matchElement.baseOverlap(1), matchElement.baseOverlap(2), matchElement.baseOverlap(2)], ...
 %         [-1.5*(k-1)-0.1,-1.5*(k-1)-0.4,-1.5*(k-1)-0.4,-1.5*(k-1)-0.1], ...
 %         [1, 1, 2, 2]);
+    for j = 1:length(matchTags)
+        x = (matchTags(j).start + matchTags(j).end)/2;
+        xNew = mapCoordinate(x, matchElement.matchOverlap, matchElement.baseOverlap);
+        if xNew >= xDisplayRange(1) && xNew <= xDisplayRange(2)
+            text(ax, xNew, 0.5 - 1.5*k, num2str(matchTags(j).data),'HorizontalAlignment','center');
+        end
+    end
 end
+xlim(ax, xDisplayRange);
 ylim(ax, [-0.5 - 1.5*nMatch, 1.5]);
 legend(ax, 'Interpreter', 'none');
+
+function xNew = mapCoordinate(x, xRange, xRangeNew)
+% Map coordinate from one space to another
+dx = xRange(2) - xRange(1);
+dxNew = xRangeNew(2) - xRangeNew(1);
+xNew = (x - xRange(1)) * dxNew / dx + xRangeNew(1);
+
+
+function [counts, elements] = getCounts(x, idfunc, cmpfunc)
+if ~exist('idfunc', 'var')
+    idfunc = @(x)x;
+end
+if ~exist('cmpfunc', 'var')
+    cmpfunc = @(x, y)x==y;
+end
+elements = unique2(x, idfunc, cmpfunc);
+counts = zeros(size(elements));
+dims = 1:length(size(x));
+for k = 1:length(elements)
+    for j = 1:length(x)
+        counts(k) = sum(cmpfunc(idfunc(x(j)), idfunc(elements(k))), dims);
+    end
+end
+
+function elements = unique2(x, idfunc, cmpfunc)
+if ~exist('idfunc', 'var')
+    idfunc = @(x)x;
+end
+if ~exist('cmpfunc', 'var')
+    cmpfunc = @(x, y)x==y;
+end
+elements = [];
+for k = 1:length(x)
+    isUnique = true;
+    for j = 1:length(elements)
+        if cmpfunc(idfunc(x(k)), idfunc(elements(j)))
+            isUnique = false;
+            break;
+        end
+    end
+    if isUnique
+        elements = [elements, x(k)];
+    end
+end
 
 function tagData = getTagData(filePath, allTagData)
 tagData = allTagData(strcmp({allTagData.file}, filePath)).tagData;
@@ -261,7 +348,7 @@ end
 for segC = {rA, rB, sA, sB}
     seg = segC{1};
     assert(length(seg) == 2, 'Error, all inputs to overlapSegments must have length 2');
-    assert(seg(1) < seg(2), 'Error, all inputs to overlapSegments must have second value greater than the first');
+    assert(seg(1) <= seg(2), 'Error, all inputs to overlapSegments must have second value greater than the first');
 end
 
 % Scale conversion between coordinate system B and A
@@ -312,10 +399,10 @@ end
 function ext = getExtension(path)
 [~, ~, ext] = fileparts(path);
 
-function newTagIds = deduplicateTagIds(tagIds)
-tagIdDuplicateCounts = [];
-for k = 1:length(tagIds)
-    tagIdDuplicateCounts(k) = sum(tagIds(1:k-1) == tagIds(k));
-end
-tagIdDuplicateCounts = 1-(2.^(-tagIdDuplicateCounts)); 
-newTagIds = tagIds + tagIdDuplicateCounts;
+% function newTagIds = deduplicateTagIds(tagIds)
+% tagIdDuplicateCounts = [];
+% for k = 1:length(tagIds)
+%     tagIdDuplicateCounts(k) = sum(tagIds(1:k-1) == tagIds(k));
+% end
+% tagIdDuplicateCounts = 1-(2.^(-tagIdDuplicateCounts)); 
+% newTagIds = tagIds + tagIdDuplicateCounts;
