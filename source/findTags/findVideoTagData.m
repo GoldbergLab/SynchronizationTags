@@ -1,30 +1,23 @@
-function [tags, tagData] = findVideoTags(xmlFile, nBits, showPlot)
+function tagData = findVideoTagData(xmlFile, showPlot)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% findVideoTags: Find binary synchronization tags within Phantom Camera 
-%   Control-generated video metadata .xml file
-% usage:  [tags, tagData] = findVideoTags(datFile, nBits)
+% findVideoTagData: Extract binary synchronization tag data within Phantom
+%   Camera Control-generated video metadata .xml file
+% usage:  tagData = findVideoTagData(datFile)
 %
 % where,
-%    tags is a struct array containing a list of the tags found within the
-%       tagData. Each element contains the decoded tag ID number, the start
-%       index of the tag (rising edge of the start marker), and the stop 
-%       index of the tag (falling edge of the end marker).
 %    tagData is a logical vector containing the extracted raw tag data.
 %    xmlFile is a char array representing the path to a video metadata .xml
 %       file
-%    nBits is an optional # of bits to expect in the tags, which can
-%       increase reliability of tag Ids. Default is NaN, meaning any # of
-%       bits will be allowed.
 %    showPlot is an optional boolean flag that determines whether or not to
-%       plot the extracted tag data in a figure.
+%       plot the extracted tag data in a figure. (default false)
 %
 % See findTags for detailed information about the synchronization tag
 %   concept.
 %
-% findVideoTags will extract the binary synchronization tag data from a 
+% findVideoTagData will extract the binary synchronization tag data from a 
 %   Phantom Camera Control-generated video metadata .xml file
 %
-% See also: findTags, syncVideoToFPGA, findFPGATags
+% See also: findTags, syncVideoToFPGA, findFPGATagData
 %
 % Version: 1.0
 % Author:  Brian Kardon
@@ -32,9 +25,6 @@ function [tags, tagData] = findVideoTags(xmlFile, nBits, showPlot)
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-if ~exist('nBits', 'var')
-    nBits = NaN;
-end
 if ~exist('showPlot', 'var')
     showPlot = false;
 end
@@ -77,5 +67,5 @@ if showPlot
     ylim(ax, [-0.5, 1.5]);
 end
 
-%% Find tags in tag data
-tags = findTags(tagData, nBits);
+% %% Find tags in tag data
+% tags = findTags(tagData, nBits);
