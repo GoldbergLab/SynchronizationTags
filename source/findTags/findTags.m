@@ -1,4 +1,4 @@
-function tags = findTags(tagData, nBits, nTags, fileStartOffset)
+function tags = findTags(tagBinaryID, nBits, nTags, fileStartOffset)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % findTags: find binary synchronization tags in a vector of digital data.
 % usage:  tags = tagData(tagData[, nTags])
@@ -109,17 +109,17 @@ end
 
 %% Prepare
 % Initialize output tags structure
-tags = struct('data', {}, 'start', {}, 'end', {});
+tags = struct('ID', {}, 'start', {}, 'end', {});
 
 % Ensure tag data is a column vector
-if isrow(tagData)
-    tagData = tagData';
+if isrow(tagBinaryID)
+    tagBinaryID = tagBinaryID';
 end
 
 %% Identify pulse locations
 % Find where tagData is high
-risingEdgeTimes = find(diff(tagData)==1)+1;
-fallingEdgeTimes = find(diff(tagData)==-1);
+risingEdgeTimes = find(diff(tagBinaryID)==1)+1;
+fallingEdgeTimes = find(diff(tagBinaryID)==-1);
 % Note that the above will NOT mark a high on the first sample as a rising edge.
 %   which is good.
 
@@ -240,20 +240,20 @@ for k = 1:length(markerIdx)-1
         startTimeM = dataMid - tagStruct.pulseWidth;
         endTimeM = dataEnd + tagStruct.pulseWidth;
 %         fprintf('Total data size (pw) = %f\n', (dataEnd - dataStart)/tagStruct.pulseWidth);
-        [tagData, tagDataM] = getMirroredTagData(risingEdgeTimes(dataPulseIdx), startTime, endTime, startTimeM, endTimeM, tagStruct);
+        [tagBinaryID, tagBinaryIDM] = getMirroredTagBinaryID(risingEdgeTimes(dataPulseIdx), startTime, endTime, startTimeM, endTimeM, tagStruct);
 
-        if ~isnan(nBits) && length(tagData) ~= nBits
+        if ~isnan(nBits) && length(tagBinaryID) ~= nBits
             disp('Wrong # of bits - possibly data missing.')
             continue;
         end
-        tagId = convertTagDataToId(tagData);
-        tagIdM = convertTagDataToId(tagData);
+        tagId = convertTagDataToId(tagBinaryID);
+        tagIdM = convertTagDataToId(tagBinaryIDM);
         if tagId ~= tagIdM
             fprintf('Mirrored tag data does not match! %d ~= %d\n', tagId, tagIdM);
             continue;
         end
         nextTagIndex = length(tags)+1;
-        tags(nextTagIndex).data = tagId;
+        tags(nextTagIndex).ID = tagId;
         tags(nextTagIndex).start = risingEdgeTimes(markerIdx1);
         tags(nextTagIndex).end = fallingEdgeTimes(markerIdx2);
         if (length(tags) >= nTags)
@@ -295,30 +295,30 @@ function tagId = convertTagDataToId(tagData)
     tagId = bin2dec(tagData);
 end
 
-function [tagData, tagDataM] = getMirroredTagData(dataPulseRisingEdgeTimes, startTime, endTime, startTimeM, endTimeM, tagStruct)
+function [tagBinaryID, tagBinaryIDM] = getMirroredTagBinaryID(dataPulseRisingEdgeTimes, startTime, endTime, startTimeM, endTimeM, tagStruct)
 % Extract tag data and mirrored tag data from data portion of a tag
 % MidTime is the start time for the mirrored tag data
 dpret = dataPulseRisingEdgeTimes(1:(length(dataPulseRisingEdgeTimes)/2));
 dpretM = dataPulseRisingEdgeTimes((length(dataPulseRisingEdgeTimes)/2 + 1):end);
 
-tagData = getTagData(dpret, startTime, endTime, tagStruct);
-tagDataM = flip(getTagData(dpretM, startTimeM, endTimeM, tagStruct));
+tagBinaryID = getTagBinaryID(dpret, startTime, endTime, tagStruct);
+tagBinaryIDM = flip(getTagBinaryID(dpretM, startTimeM, endTimeM, tagStruct));
 end
 
-function tagData = getTagData(dataPulseRisingEdgeTimes, startTime, endTime, tagStruct)
+function tagBinaryID = getTagBinaryID(dataPulseRisingEdgeTimes, startTime, endTime, tagStruct)
 % Decode the tag data from the data segment of a tag
 if iscolumn(dataPulseRisingEdgeTimes)
     dataPulseRisingEdgeTimes = dataPulseRisingEdgeTimes';
 end
 % fprintf('startTime=%d, endTime=%d, dp=%f\n', startTime, endTime, (endTime-startTime)/tagStruct.pulseWidth)
-tagData = '';
+tagBinaryID = '';
 lastBitTime = startTime;
 for currentBitTime = dataPulseRisingEdgeTimes
     zeroData = getZeros(tagStruct, lastBitTime, currentBitTime);
-    tagData = ['1', zeroData, tagData];
+    tagBinaryID = ['1', zeroData, tagBinaryID];
     lastBitTime = currentBitTime;
 end
 % Add trailing zeros
 zeroData = getZeros(tagStruct, lastBitTime, endTime);
-tagData = [zeroData, tagData];
+tagBinaryID = [zeroData, tagBinaryID];
 end

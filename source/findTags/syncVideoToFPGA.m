@@ -83,8 +83,8 @@ fprintf('...done extracting tag data from files.\n');
 datTags = extractTagsFromDataset(datTagData);
 xmlTags = extractTagsFromDataset(xmlTagData);
 
-datTagIDs = [datTags.data];
-xmlTagIDs = [xmlTags.data];
+datTagIDs = [datTags.ID];
+xmlTagIDs = [xmlTags.ID];
 fprintf('\n');
 fprintf('Tags found in .dat files:\n')
 disp(datTagIDs)
@@ -112,7 +112,7 @@ end
 syncList = struct('file', {}, 'matches', {});
 for k = 1:length(baseTags)
     baseTag = baseTags(k);
-    baseTagID = baseTag.data;
+    baseTagID = baseTag.ID;
     % Have we found matches for this tag before?
     baseIdx = find(strcmp({syncList.file}, baseTag.file), 1);
     if isempty(baseIdx)
@@ -122,7 +122,7 @@ for k = 1:length(baseTags)
     end
     
     % Select the matchTag that matches the base tag ID
-    matchTagsSelected = matchTags([matchTags.data] == baseTagID);
+    matchTagsSelected = matchTags([matchTags.ID] == baseTagID);
 
     for j = 1:length(matchTagsSelected)
         matchTag = matchTagsSelected(j);
@@ -182,7 +182,7 @@ end
 function tags = extractTagsFromDataset(tagDataSet)
 % Takes a set of tagData from possibly consecutive files, and extracts all
 % tags.
-tags = struct('data', {}, 'start', {}, 'end', {}, 'file', {}, 'fileLength', {});
+tags = struct('ID', {}, 'start', {}, 'end', {}, 'file', {}, 'fileLength', {});
 
 for k = 1:length(tagDataSet)
     file = tagDataSet(k).file;
@@ -204,7 +204,7 @@ for k = 1:length(tagDataSet)
     newTagsExtended = findTags(extendedTagData, NaN, Inf, length(preTagData));
 
     % Filter out tags that aren't actually in this file:
-    newTags = struct('data', {}, 'start', {}, 'end', {});
+    newTags = struct('ID', {}, 'start', {}, 'end', {});
     for j = 1:length(newTagsExtended)
         if tagInFile(newTagsExtended(j), length(tagDataSet(k).tagData))
             newTags(end+1) = newTagsExtended(j);
@@ -221,13 +221,13 @@ end
 disp('Checking for duplicated tags...')
 [duplicateTags, ~] = getCounts(tags, @(t)t, @areTagsDuplicates);
 if duplicateTags > 0
-    msg = sprintf('%s duplicate tag IDs in fpga dat files! Make sure you only run this function on one "run" of data at a time. Exiting.', num2str([duplicateTags.data]));
+    msg = sprintf('%s duplicate tag IDs in fpga dat files! Make sure you only run this function on one "run" of data at a time. Exiting.', num2str([duplicateTags.ID]));
     error(msg);
 end
 
 function duplicate = areTagsDuplicates(t1, t2)
 % Check if two tags are duplicates
-sameID = (t1.data == t2.data);
+sameID = (t1.ID == t2.ID);
 sameFilename = strcmp(t1.file, t2.file);
 notMatchingPartialTags = ~(t1.start < 1 && t2.end > t2.fileLength || t2.start < 1 && t1.end > t1.fileLength);
 duplicate = sameID && (sameFilename || notMatchingPartialTags);
@@ -247,7 +247,7 @@ plot(ax, 1:length(baseTagData), baseTagData, 'DisplayName', [name, ext]);
 hold(ax, 'on');
 % Plot tag IDs
 for k = 1:length(baseTags)
-    text(ax, (baseTags(k).start + baseTags(k).end)/2, 0.5, num2str(baseTags(k).data),'HorizontalAlignment','center')
+    text(ax, (baseTags(k).start + baseTags(k).end)/2, 0.5, num2str(baseTags(k).ID),'HorizontalAlignment','center')
 end
 
 xDisplayRange = [min([baseTags.start, 1]), max([baseTags.end, length(baseTagData)])];
@@ -269,7 +269,7 @@ for k = 1:nMatch
         x = (matchTags(j).start + matchTags(j).end)/2;
         xNew = mapCoordinate(x, matchElement.matchOverlap, matchElement.baseOverlap);
         if xNew >= xDisplayRange(1) && xNew <= xDisplayRange(2)
-            text(ax, xNew, 0.5 - 1.5*k, num2str(matchTags(j).data),'HorizontalAlignment','center');
+            text(ax, xNew, 0.5 - 1.5*k, num2str(matchTags(j).ID),'HorizontalAlignment','center');
         end
     end
 end
