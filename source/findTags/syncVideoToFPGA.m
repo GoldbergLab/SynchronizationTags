@@ -156,10 +156,16 @@ for k = 1:length(baseTags)
             [baseTag.start, baseTag.end], ...
             [matchTag.start, matchTag.end]);
         
+        if isempty(baseOverlap)
+            % Even though the tag matches, the two files don't overlap.
+            continue;
+        end
+        
         if fileAlreadyMatched
             if ~all(matches(matchIdx).baseOverlap == baseOverlap) || ...
                ~all(matches(matchIdx).matchOverlap == matchOverlap)
-                disp('Disagreement about file overlaps based on two different tags!');
+                maxDiscrepancy = max(abs([matches(matchIdx).baseOverlap - baseOverlap, matches(matchIdx).matchOverlap == matchOverlap]));
+                fprintf('Disagreement about file overlaps based on different tags (%s)! Max discrepancy=%d\n', num2str(matchTag.ID), maxDiscrepancy);
             end
         end
         
