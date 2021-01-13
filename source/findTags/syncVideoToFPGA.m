@@ -60,7 +60,6 @@ warning('off', 'MATLAB:table:ModifiedAndSavedVarnames');
 datTagData = struct('file', {}, 'tagData', {});
 for k = 1:length(datFiles)
     file = datFiles{k};
-    [~, name, ext] = fileparts(file);
     tagData = findFPGATagData(file, 'CameraTimestamp');
     tagDataIdx = length(datTagData)+1;
     datTagData(tagDataIdx).file = file;
@@ -70,7 +69,6 @@ end
 xmlTagData = struct('file', {}, 'tagData', {});
 for k = 1:length(xmlFiles)
     file = xmlFiles{k};
-    [~, name, ext] = fileparts(file);
     tagData = findVideoTagData(file);
     tagDataIdx = length(xmlTagData)+1;
     xmlTagData(tagDataIdx).file = file;
@@ -80,8 +78,8 @@ warning('on', 'MATLAB:table:ModifiedAndSavedVarnames');
 fprintf('...done extracting tag data from files.\n');
 
 %% Extract tags from tag data
-datTags = extractTagsFromDataset(datTagData);
-xmlTags = extractTagsFromDataset(xmlTagData);
+datTags = extractTagsFromDataset(datTagData, nBits);
+xmlTags = extractTagsFromDataset(xmlTagData, nBits);
 
 datTagIDs = [datTags.ID];
 xmlTagIDs = [xmlTags.ID];
@@ -113,6 +111,9 @@ syncList = struct('file', {}, 'matches', {});
 for k = 1:length(baseTags)
     baseTag = baseTags(k);
     baseTagID = baseTag.ID;
+    fprintf('Processing base tag %d\n', baseTagID);
+    fprintf('Base file = %s\n', baseTag.file);
+    
     % Have we found matches for this tag before?
     baseIdx = find(strcmp({syncList.file}, baseTag.file), 1);
     if isempty(baseIdx)
@@ -126,6 +127,8 @@ for k = 1:length(baseTags)
 
     for j = 1:length(matchTagsSelected)
         matchTag = matchTagsSelected(j);
+        fprintf('\tProcessing match tag %d\n', matchTag.ID);
+        fprintf('\tMatch file = %s\n', matchTag.file);
         % Get all matches so far, so we can potentially add to it
         matches = syncList(baseIdx).matches;
         % Prepare to add new match data
@@ -154,7 +157,7 @@ for k = 1:length(baseTags)
             [1, length(baseTagFileTagData)], ...
             [1, length(matchedTagFileTagData)], ...
             [baseTag.start, baseTag.end], ...
-            [matchTag.start, matchTag.end]);
+            [matchTag.start, matchTag.end], true);
         
         if isempty(baseOverlap)
             % Even though the tag matches, the two files don't overlap.
@@ -166,6 +169,11 @@ for k = 1:length(baseTags)
                ~all(matches(matchIdx).matchOverlap == matchOverlap)
                 maxDiscrepancy = max(abs([matches(matchIdx).baseOverlap - baseOverlap, matches(matchIdx).matchOverlap == matchOverlap]));
                 fprintf('Disagreement about file overlaps based on different tags (%s)! Max discrepancy=%d\n', num2str(matchTag.ID), maxDiscrepancy);
+                disp(baseOverlap)
+                disp(matches(matchIdx).baseOverlap)
+                disp(matchOverlap)
+                disp(matches(matchIdx).matchOverlap)
+                disp('hi')
             end
         end
         
@@ -185,9 +193,12 @@ for k = 1:length(syncList)
     plotMatches(syncList(k), baseTagData, matchTagData, baseTags, matchTags);
 end
 
-function tags = extractTagsFromDataset(tagDataSet)
+function tags = extractTagsFromDataset(tagDataSet, nBits)
 % Takes a set of tagData from possibly consecutive files, and extracts all
 % tags.
+if ~exist('nBits', 'var')
+    nBits = NaN;
+end
 tags = struct('ID', {}, 'start', {}, 'end', {}, 'file', {}, 'fileLength', {});
 
 for k = 1:length(tagDataSet)
@@ -207,7 +218,7 @@ for k = 1:length(tagDataSet)
         postTagData = tagDataSet(k+1).tagData;
     end
     extendedTagData = [preTagData, tagDataSet(k).tagData, postTagData];
-    newTagsExtended = findTags(extendedTagData, NaN, Inf, length(preTagData));
+    newTagsExtended = findTags(extendedTagData, nBits, Inf, length(preTagData));
 
     % Filter out tags that aren't actually in this file:
     newTags = struct('ID', {}, 'start', {}, 'end', {});
@@ -227,8 +238,7 @@ end
 disp('Checking for duplicated tags...')
 [duplicateTags, ~] = getCounts(tags, @(t)t, @areTagsDuplicates);
 if duplicateTags > 0
-    msg = sprintf('%s duplicate tag IDs in fpga dat files! Make sure you only run this function on one "run" of data at a time. Exiting.', num2str([duplicateTags.ID]));
-    error(msg);
+    error('%s duplicate tag IDs in fpga dat files! Make sure you only run this function on one "run" of data at a time. Exiting.', num2str([duplicateTags.ID]));
 end
 
 function duplicate = areTagsDuplicates(t1, t2)
