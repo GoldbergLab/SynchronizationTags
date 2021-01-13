@@ -17,8 +17,8 @@ function syncList = syncVideoToFPGA(videoRootDir, fpgaRootDir, matchDirection, n
 %       or FPGA to video. One of {'FPGAToVideo', 'VideoToFPGA'}. Default is
 %       'VideoToFPGA'
 %    nBits is an optional # of bits to expect in the tags, which can
-%       increase reliability of tag Ids. Default is NaN, meaning any # of
-%       bits will be allowed.
+%       increase reliability of tag IDs, but is generally not necessary. 
+%       Default is NaN, meaning any # of bits will be allowed.
 %    plotSync is an option boolean flag indicating whether or not to plot
 %       the synchronized tag data
 %
