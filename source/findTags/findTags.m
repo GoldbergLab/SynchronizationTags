@@ -264,7 +264,7 @@ for k = 1:length(markerIdx)-1
     end
 end
 
-%% Loop over tags and adjust for fileStartIndex
+%% Loop over tags and adjust for fileStartOffset
 for k = 1:length(tags)
     tags(k).start = tags(k).start - fileStartOffset;
     tags(k).end = tags(k).end - fileStartOffset;
