@@ -1,4 +1,4 @@
-function syncList = syncVideoToFPGA(videoRootDir, fpgaRootDir, matchDirection, nBits)
+function syncList = syncVideoToFPGA(videoRootDir, fpgaRootDir, matchDirection, nBits, plotSync)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % syncVideoToFPGA: Create a synchronization list to match FPGA and video files together.
 % usage:  syncList = syncVideoToFPGA(videoRootDir, fpgaRootDir, 
@@ -19,6 +19,8 @@ function syncList = syncVideoToFPGA(videoRootDir, fpgaRootDir, matchDirection, n
 %    nBits is an optional # of bits to expect in the tags, which can
 %       increase reliability of tag Ids. Default is NaN, meaning any # of
 %       bits will be allowed.
+%    plotSync is an option boolean flag indicating whether or not to plot
+%       the synchronized tag data
 %
 % See findTags for detailed information about the synchronization tag
 %   concept.
@@ -41,6 +43,9 @@ if ~exist('matchDirection', 'var')
 end
 if ~exist('nBits', 'var')
     nBits = NaN;
+end
+if ~exist('plotSync', 'var')
+    plotSync = true;
 end
 
 % videoRootDir = 'C:\Users\Brian Kardon\Dropbox\Documents\Work\Cornell Lab Tech\Projects\Synchronization\testing\HFL test data';
@@ -189,8 +194,10 @@ for k = 1:length(baseTags)
     end
 end
 
-for k = 1:length(syncList)
-    plotMatches(syncList(k), baseTagData, matchTagData, baseTags, matchTags);
+if plotSync
+    for k = 1:length(syncList)
+        plotMatches(syncList(k), baseTagData, matchTagData, baseTags, matchTags);
+    end
 end
 
 function tags = extractTagsFromDataset(tagDataSet, nBits)
