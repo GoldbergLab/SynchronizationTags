@@ -29,17 +29,24 @@ if ~exist('showPlot', 'var')
     showPlot = false;
 end
 
-
 %% Parse XML file:
 
 % relevant xml structure:
 %
 % <chd>
+%   <CineFileHeader>
+%       <TotalImageCount>5277</TotalImageCount>
 %   <TIMEBLOCK>
 %       <Time frame="458">13:49:26.122 427.66 E</Time>
 
 % Read file
 rootNode = xmlread(xmlFile);
+% Get image count, for double-checking that we got all the frames.
+cineFileHeaders = rootNode.getElementsByTagName('CineFileHeader');
+cineFileHeader = cineFileHeaders.item(0);
+totalImageCounts = cineFileHeader.getElementsByTagName('TotalImageCount');
+totalImageCount = totalImageCounts.item(0);
+Ncheck = str2double(totalImageCount.getFirstChild.getTextContent);
 % Find section containing time elements. Careful! There is one <Time>
 %   element that does NOT represent a frame - it's in the <CineFileHeader>
 %   node. It was throwing me off by adding an extra spurious 0 to the data.
@@ -60,6 +67,10 @@ for k = 0:N-1
     if strcmp(timeText.charAt(timeText.length-1), 'E')
         tagData(k+1) = true;
     end
+end
+
+if N ~= Ncheck
+    error('Error reading tag data from file %s\nNumber of samples retrieved from file do not match the number of recorded frames!', xmlFile)
 end
 
 %% Plot data
