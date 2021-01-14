@@ -40,8 +40,13 @@ end
 
 % Read file
 rootNode = xmlread(xmlFile);
+% Find section containing time elements. Careful! There is one <Time>
+%   element that does NOT represent a frame - it's in the <CineFileHeader>
+%   node. It was throwing me off by adding an extra spurious 0 to the data.
+timeBlockNodes = rootNode.getElementsByTagName('TIMEBLOCK');
+timeBlockNode = timeBlockNodes.item(0);
 % Get list of <Time> elements
-timeNodeList = rootNode.getElementsByTagName('Time');
+timeNodeList = timeBlockNode.getElementsByTagName('Time');
 % Find total # of <Time> elements (corresponds to # of frames in video)
 N = timeNodeList.getLength;
 % Preallocate tagData
@@ -53,7 +58,7 @@ for k = 0:N-1
     % Look for an "E" at the end of the text, which indicates a "1" in the
     %   binary tag data stream.
     if strcmp(timeText.charAt(timeText.length-1), 'E')
-        tagData(k) = true;
+        tagData(k+1) = true;
     end
 end
 
