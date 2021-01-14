@@ -1,4 +1,4 @@
-function tags = findTags(tagBinaryID, nBits, nTags, fileStartOffset)
+function tags = findTags(tagData, preTagData, postTagData, nBits, nTags)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % findTags: find binary synchronization tags in a vector of digital data.
 % usage:  tags = tagData(tagData[, nTags])
@@ -10,6 +10,12 @@ function tags = findTags(tagBinaryID, nBits, nTags, fileStartOffset)
 %       index of the tag (falling edge of the end marker).
 %    tagData is a 1D vector of tag data. It can be logical, or any type
 %       that can evaluate to logical.
+%    preData is an optional 1D vector of tag data from the file preceding
+%       the current file. Include it if you want to be able to detect tags
+%       that overlap the previous file. Default: []
+%    postData is an optional 1D vector of tag data from the file after the
+%       current file. Include it if you want to be able to detect tags
+%       that overlap the next file. Default: []
 %    nBits is an optional number of bits to expect in the tag data.
 %       Providing this can improve reliability of tag IDs where there is 
 %       the possibility of missing chunks of data. If omitted, or set to 
@@ -17,9 +23,6 @@ function tags = findTags(tagBinaryID, nBits, nTags, fileStartOffset)
 %       generating an error.
 %    nTags is an optional number describing the maximum # of tags to find.
 %       If omitted, or set to Inf (default), all tags are found.
-%    fileStartOffset is an optional parameter indicating how much the data
-%       has been shifted by pre-file data (to account for sub-tag file 
-%       overlaps) without affecting the output indices. Default is 0.
 %
 % Synchronizing two data streams requires a reference signal that is 
 %   is present in both streams, and is either identical, or at least has
@@ -97,29 +100,45 @@ function tags = findTags(tagBinaryID, nBits, nTags, fileStartOffset)
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+if ~exist('preTagData', 'var')
+    preTagData = [];
+end
+if ~exist('postTagData', 'var')
+    postTagData = [];
+end
 if ~exist('nBits', 'var')
     nBits = NaN;
 end
 if ~exist('nTags', 'var')
     nTags = Inf;
 end
-if ~exist('fileStartOffset', 'var')
-    fileStartOffset = 0;
-end
 
 %% Prepare
 % Initialize output tags structure
-tags = struct('ID', {}, 'start', {}, 'end', {});
+tags = struct('ID', {}, 'start', {}, 'end', {}, 'reliability', {});
+
+tagDataLength = length(tagData);
+preTagDataLength = length(preTagData);
+postTagDataLength = length(postTagData);
+% Concatenate preTagData and postTagData with tagData.
+tagData = [preTagData, tagData, postTagData];
 
 % Ensure tag data is a column vector
-if isrow(tagBinaryID)
-    tagBinaryID = tagBinaryID';
+if isrow(tagData)
+    tagData = tagData';
 end
+
+% Reliability is a rough measure of how reliable the tag is. 0 means the
+%   tag had no irregularities. Less than zero means there were some
+%   irregularities that cast doubt on the tag's reliability.
+%   This should primarily be used to choose which tag to believe, when two
+%   of them contradict each other.
+baseReliability = 0;
 
 %% Identify pulse locations
 % Find where tagData is high
-risingEdgeTimes = find(diff(tagBinaryID)==1)+1;
-fallingEdgeTimes = find(diff(tagBinaryID)==-1);
+risingEdgeTimes = find(diff(tagData)==1)+1;
+fallingEdgeTimes = find(diff(tagData)==-1);
 % Note that the above will NOT mark a high on the first sample as a rising edge.
 %   which is good.
 
@@ -182,9 +201,11 @@ end
 
 if ~isempty(badPulseIdx)
     fprintf('Warning, %d non-standard-width pulses found!\n', length(badPulseIdx));
+    baseReliability = baseReliability - 1;
 end
 if ~isempty(badMarkerIdx)
     fprintf('Warning, %d non-standard-width markers found!\n', length(badMarkerIdx));
+    baseReliability = baseReliability - 1;
 end
 
 %% Check for bad data
@@ -209,8 +230,20 @@ end
 % pair of markers
 markerIdx = find(pulseTypeIdx == tagStruct.markerId);
 for k = 1:length(markerIdx)-1
+    % Reset tagReliability for next tag
+    tagReliability = baseReliability;
+
     markerIdx1 = markerIdx(k);
     markerIdx2 = markerIdx(k+1);
+
+    tagStart = risingEdgeTimes(markerIdx1);
+    tagEnd = fallingEdgeTimes(markerIdx2);
+
+    if tagEnd <= preTagDataLength || tagStart > preTagDataLength + tagDataLength
+        % This tag does not overlap main tag data, ignore it.
+        continue;
+    end
+
 %     if any(markerIdx1 == badMarkerIdx) || any(markerIdx2 == badMarkerIdx)
 %         disp('Bad marker!')
 %         continue;
@@ -240,22 +273,38 @@ for k = 1:length(markerIdx)-1
         startTimeM = dataMid - tagStruct.pulseWidth;
         endTimeM = dataEnd + tagStruct.pulseWidth;
 %         fprintf('Total data size (pw) = %f\n', (dataEnd - dataStart)/tagStruct.pulseWidth);
-        [tagBinaryID, tagBinaryIDM] = getMirroredTagBinaryID(risingEdgeTimes(dataPulseIdx), startTime, endTime, startTimeM, endTimeM, tagStruct);
+        [tagData, tagBinaryIDM] = getMirroredTagBinaryID(risingEdgeTimes(dataPulseIdx), startTime, endTime, startTimeM, endTimeM, tagStruct);
 
-        if ~isnan(nBits) && length(tagBinaryID) ~= nBits
+        if ~isnan(nBits) && length(tagData) ~= nBits
             disp('Wrong # of bits - possibly data missing.')
             continue;
         end
-        tagId = convertTagDataToId(tagBinaryID);
+        tagId = convertTagDataToId(tagData);
         tagIdM = convertTagDataToId(tagBinaryIDM);
         if tagId ~= tagIdM
             fprintf('Mirrored tag data does not match! %d ~= %d\n', tagId, tagIdM);
             continue;
         end
+        
+        % Downgrade tag reliability if it overlaps the preData (it could
+        %   include a gap)
+        if tagStart <= preTagDataLength
+            tagReliability = tagReliability - 1;
+        end
+        % Downgrade tag reliability if it overlaps the postData (it could
+        %   include a gap)
+        if tagEnd > preTagDataLength + tagDataLength
+            tagReliability = tagReliability - 1;
+        end
+        
+        
         nextTagIndex = length(tags)+1;
         tags(nextTagIndex).ID = tagId;
-        tags(nextTagIndex).start = risingEdgeTimes(markerIdx1);
-        tags(nextTagIndex).end = fallingEdgeTimes(markerIdx2);
+        tags(nextTagIndex).start = tagStart;
+        tags(nextTagIndex).end = tagEnd;
+        % Transform tagReliability to a number between 0 and 1.
+        tags(nextTagIndex).reliability = 2^tagReliability;
+        
         if (length(tags) >= nTags)
             return;
         end
@@ -266,8 +315,8 @@ end
 
 %% Loop over tags and adjust for fileStartOffset
 for k = 1:length(tags)
-    tags(k).start = tags(k).start - fileStartOffset;
-    tags(k).end = tags(k).end - fileStartOffset;
+    tags(k).start = tags(k).start - preTagDataLength;
+    tags(k).end = tags(k).end - preTagDataLength;
 end
 
 end

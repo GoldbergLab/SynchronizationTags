@@ -48,6 +48,8 @@ if ~exist('plotSync', 'var')
     plotSync = true;
 end
 
+allowableTagJitter = 1;   % Allowable amount of tag size discrepancy before a warning is issued.
+
 % videoRootDir = 'C:\Users\Brian Kardon\Dropbox\Documents\Work\Cornell Lab Tech\Projects\Synchronization\testing\HFL test data';
 % fpgaRootDir = 'C:\Users\Brian Kardon\Dropbox\Documents\Work\Cornell Lab Tech\Projects\Synchronization\testing\HFL test data\test2';
 % Find FPGA .dat files and video .xml files
@@ -116,8 +118,12 @@ syncList = struct('file', {}, 'matches', {});
 for k = 1:length(baseTags)
     baseTag = baseTags(k);
     baseTagID = baseTag.ID;
-    fprintf('Processing base tag %d\n', baseTagID);
-    fprintf('Base file = %s\n', baseTag.file);
+%     fprintf('\n\n');
+%     fprintf('Processing base tag %d\n', baseTagID);
+%     [~, name, ext] = fileparts(baseTag.file);
+%     fprintf('Base file = %s\n', [name, ext]);
+%     fprintf('Base tag duration = %d\n', baseTag.end - baseTag.start);
+%     fprintf('Base tag reliability = %d\n', baseTag.reliability);
     
     % Have we found matches for this tag before?
     baseIdx = find(strcmp({syncList.file}, baseTag.file), 1);
@@ -132,8 +138,13 @@ for k = 1:length(baseTags)
 
     for j = 1:length(matchTagsSelected)
         matchTag = matchTagsSelected(j);
-        fprintf('\tProcessing match tag %d\n', matchTag.ID);
-        fprintf('\tMatch file = %s\n', matchTag.file);
+%         fprintf('\tProcessing match tag:\n')
+%         [~, name, ext] = fileparts(matchTag.file);
+%         fprintf('\tMatch file = %s\n', [name, ext]);
+%         fprintf('\tTag duration=%d\n', matchTag.end - matchTag.start);
+%         fprintf('\tBase file duration=%d\n', baseTag.fileLength);
+%         fprintf('\tMatch file duration=%d\n', matchTag.fileLength);
+%         fprintf('\tMatch file reliability=%d\n', matchTag.reliability);
         % Get all matches so far, so we can potentially add to it
         matches = syncList(baseIdx).matches;
         % Prepare to add new match data
@@ -145,22 +156,20 @@ for k = 1:length(baseTags)
             % Check if this matched file has been matched before
             matchIdx = find(strcmp({matches.matchFile}, matchTag.file), 1);
             if isempty(matchIdx)
-                % First time matching this file - add it to the end.
+                % First time matching this file - add it to the end of the
+                %   match list.
                 fileAlreadyMatched = false;
                 matchIdx = length(matches)+1;
             else
-                % This file has been matched before (with other tags)
+                % This file has been matched before (via other tags)
                 fileAlreadyMatched = true;
             end
         end
         
         % Calculate alignment info for match
-        baseTagFileTagData = getTagData(baseTag.file, baseTagData);
-        matchedTagFileTagData = getTagData(matchTag.file, matchTagData);
-
         [baseOverlap, matchOverlap] = overlapSegments(...
-            [1, length(baseTagFileTagData)], ...
-            [1, length(matchedTagFileTagData)], ...
+            [1, baseTag.fileLength], ...
+            [1, matchTag.fileLength], ...
             [baseTag.start, baseTag.end], ...
             [matchTag.start, matchTag.end], true);
         
@@ -173,12 +182,11 @@ for k = 1:length(baseTags)
             if ~all(matches(matchIdx).baseOverlap == baseOverlap) || ...
                ~all(matches(matchIdx).matchOverlap == matchOverlap)
                 maxDiscrepancy = max(abs([matches(matchIdx).baseOverlap - baseOverlap, matches(matchIdx).matchOverlap == matchOverlap]));
-                fprintf('Disagreement about file overlaps based on different tags (%s)! Max discrepancy=%d\n', num2str(matchTag.ID), maxDiscrepancy);
+                fprintf('\tDisagreement about file overlaps based on different tags (%s)! Max discrepancy=%d\n', num2str(matchTag.ID), maxDiscrepancy);
                 disp(baseOverlap)
                 disp(matches(matchIdx).baseOverlap)
                 disp(matchOverlap)
                 disp(matches(matchIdx).matchOverlap)
-                disp('hi')
             end
         end
         
@@ -206,7 +214,7 @@ function tags = extractTagsFromDataset(tagDataSet, nBits)
 if ~exist('nBits', 'var')
     nBits = NaN;
 end
-tags = struct('ID', {}, 'start', {}, 'end', {}, 'file', {}, 'fileLength', {});
+tags = struct('ID', {}, 'start', {}, 'end', {}, 'file', {}, 'fileLength', {}, 'reliability', {});
 
 for k = 1:length(tagDataSet)
     file = tagDataSet(k).file;
@@ -224,16 +232,9 @@ for k = 1:length(tagDataSet)
     else
         postTagData = tagDataSet(k+1).tagData;
     end
-    extendedTagData = [preTagData, tagDataSet(k).tagData, postTagData];
-    newTagsExtended = findTags(extendedTagData, nBits, Inf, length(preTagData));
+    
+    newTags = findTags(tagDataSet(k).tagData, preTagData, postTagData, nBits);
 
-    % Filter out tags that aren't actually in this file:
-    newTags = struct('ID', {}, 'start', {}, 'end', {});
-    for j = 1:length(newTagsExtended)
-        if tagInFile(newTagsExtended(j), length(tagDataSet(k).tagData))
-            newTags(end+1) = newTagsExtended(j);
-        end
-    end
     fprintf('   ...done. Found %d tags\n', length(newTags));
     fileField = repmat({file}, [1, length(newTags)]);
     [newTags.file] = fileField{:};
