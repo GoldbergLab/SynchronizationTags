@@ -35,7 +35,9 @@ if ~exist('showPlot', 'var')
 end
 
 %% Read .dat file
+warning('off', 'MATLAB:table:ModifiedAndSavedVarnames');
 data = readtable(datFile);
+warning('on', 'MATLAB:table:ModifiedAndSavedVarnames');
 
 tagData = logical(data.(tagFieldName));
 
