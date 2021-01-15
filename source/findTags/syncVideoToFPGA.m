@@ -28,9 +28,10 @@ function syncList = syncVideoToFPGA(videoRootDir, fpgaRootDir, matchDirection, n
 % syncVideoToFPGA will search through a set of video .xml metadata files, 
 %   and fpga .dat files, and use the binary synchronization tags found within
 %   each file to generate alignment information for the corresponding video
-%   and fpga data.
+%   and fpga data. This is a wrapper function for syncTagStreams that
+%   performs the file-finding process prior to running syncTagStreams.
 %
-% See also: findTags, findFPGATags, findVideoTags
+% See also: syncTagStreams, findTags, findFPGATags, findVideoTags
 %
 % Version: 1.0
 % Author:  Brian Kardon
