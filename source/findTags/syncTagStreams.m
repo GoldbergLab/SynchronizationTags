@@ -110,17 +110,18 @@ for k = 1:length(tags{1})
         syncList(baseIdx).matches = {};
     end
     
-    for n = 1:length(fileStreams)
+    for n = 2:length(fileStreams)
+        m = n-1;
         % Select the matchTag that matches the base tag ID
         matchTagsSelected = tags{n}([tags{n}.ID] == baseTagID);
 
         for j = 1:length(matchTagsSelected)
             matchTag = matchTagsSelected(j);
             % Get all matches so far, so we can potentially add to it
-            if length(syncList(baseIdx).matches) < n
-                syncList(baseIdx).matches{n} = [];
+            if length(syncList(baseIdx).matches) < m
+                syncList(baseIdx).matches{m} = [];
             end
-            matches = syncList(baseIdx).matches{n};
+            matches = syncList(baseIdx).matches{m};
             % Prepare to add new match data
             if isempty(matches)
                 % No matches yet. This'll be the first.
@@ -171,7 +172,7 @@ for k = 1:length(tags{1})
             matches(matchIdx).matchOverlap = matchOverlap;
             matches(matchIdx).sampleRateRatio = (matchOverlap(2)-matchOverlap(1))/(baseOverlap(2)-baseOverlap(1));
 
-            syncList(baseIdx).matches{n} = matches;
+            syncList(baseIdx).matches{m} = matches;
         end
     end
 end
@@ -217,11 +218,12 @@ for k = 1:length(tagDataSet)
     tags = [tags, newTags];
 end
 
-disp('Checking for duplicated tags...')
+fprintf('\t\tChecking for duplicated tags...\n')
 [duplicateTags, ~] = getCounts(tags, @(t)t, @areTagsDuplicates);
 if duplicateTags > 0
     error('%s duplicate tag IDs in fpga dat files! Make sure you only run this function on one "run" of data at a time. Exiting.', num2str([duplicateTags.ID]));
 end
+fprintf('\t\t...no duplicated tags found.\n');
 
 function duplicate = areTagsDuplicates(t1, t2)
 % Check if two tags are duplicates
@@ -252,21 +254,22 @@ xDisplayRange = [min([baseTags.start, 1]), max([baseTags.end, length(baseTagData
 
 totalNMatch = 0;
 for n = 2:length(tagDataSet)
-    nMatch = length(syncElement.matches{n});
+    m = n - 1;
+    nMatch = length(syncElement.matches{m});
     totalNMatch = totalNMatch + nMatch;
     for k = 1:nMatch
-        matchElement = syncElement.matches{n}(k);
+        matchElement = syncElement.matches{m}(k);
         matchTagData = getTagData(matchElement.matchFile, tagDataSet{n});
         matchTags = tagSet{n}(strcmp({tagSet{n}.file}, matchElement.matchFile));
         matchOverlapIdx = matchElement.matchOverlap(1):matchElement.matchOverlap(2);
         baseOverlapIdx = linspace(matchElement.baseOverlap(1), matchElement.baseOverlap(2), length(matchOverlapIdx));
         [~, name, ext] = fileparts(matchElement.matchFile);
-        plot(ax, baseOverlapIdx, matchTagData(matchOverlapIdx)-1.5*k*(n-1), 'DisplayName', [name, ext]);
+        plot(ax, baseOverlapIdx, matchTagData(matchOverlapIdx)-1.5*k*m, 'DisplayName', [name, ext]);
         for j = 1:length(matchTags)
             x = (matchTags(j).start + matchTags(j).end)/2;
             xNew = mapCoordinate(x, matchElement.matchOverlap, matchElement.baseOverlap);
             if xNew >= xDisplayRange(1) && xNew <= xDisplayRange(2)
-                text(ax, xNew, 0.5 - 1.5*k*(n-1), num2str(matchTags(j).ID),'HorizontalAlignment','center');
+                text(ax, xNew, 0.5 - 1.5*k*m, num2str(matchTags(j).ID),'HorizontalAlignment','center');
             end
         end
     end
