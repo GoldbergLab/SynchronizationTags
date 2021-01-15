@@ -20,7 +20,7 @@ function syncList = syncVideoToFPGA(videoRootDir, fpgaRootDir, matchDirection, n
 %       increase reliability of tag IDs, but is generally not necessary. 
 %       Default is NaN, meaning any # of bits will be allowed.
 %    plotSync is an option boolean flag indicating whether or not to plot
-%       the synchronized tag data
+%       the synchronized tag data. Default is false.
 %
 % See findTags for detailed information about the synchronization tag
 %   concept.
@@ -46,7 +46,7 @@ if ~exist('nBits', 'var')
     nBits = NaN;
 end
 if ~exist('plotSync', 'var')
-    plotSync = true;
+    plotSync = false;
 end
 
 % Find FPGA .dat files and video .xml files
