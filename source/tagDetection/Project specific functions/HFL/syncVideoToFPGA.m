@@ -31,7 +31,7 @@ function syncList = syncVideoToFPGA(videoRootDir, fpgaRootDir, matchDirection, n
 %   and fpga data. This is a wrapper function for syncTagStreams that
 %   performs the file-finding process prior to running syncTagStreams.
 %
-% See also: syncTagStreams, findTags, findFPGATags, findVideoTags
+% See also: syncTagStreams, findTags, findFPGATagData, findVideoTagData
 %
 % Version: 1.0
 % Author:  Brian Kardon
