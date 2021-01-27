@@ -8,7 +8,23 @@ function syncList = syncTagStreams(fileStreams, fileParsers, nBits, plotSync)
 %    syncList is a struct array, one element for each "match from" file
 %       (either fpga or video), and a match object indicating one or more
 %       "match to" files that contained matching tags, along with alignment
-%       info for those corresponding files.
+%       info for those corresponding files. syncList has the following
+%       structure:
+%       
+%    syncList = 1xN struct array. N is the number of base files that matched files in other data streams.
+%       syncList(k).file = the file path of the kth base file
+%       syncList(k).matches = a 1xM cell array, where M is the number of matching data streams provided.
+%       syncList(k).matches{j} = match objects from the jth matching data streams matching the kth base file.
+%       syncList(k).matches{j}(a) = a struct representing the ath match between files in the jth matching stream and the kth base file.
+%       syncList(k).matches{j}(a).baseFile = the base filename, for convenience.
+%       syncList(k).matches{j}(a).matchFile = the matching filename
+%       syncList(k).matches{j}(a).baseFile = the base filename, for convenience.
+%       syncList(k).matches{j}(a).baseOverlap = range of indices in base file that overlap match file.
+%       syncList(k).matches{j}(a).matchOverlap = range of indices in match file that overlap base file.
+%       syncList(k).matches{j}(a).sampleRateRatio = the detected sample rate ratio between the base file and the match file.
+%       syncList(k).matches{j}(a).baseFileLength = # of samples in the base file, for convenience.
+%       syncList(k).matches{j}(a).matchFileLength = # of samples in the match file, for convenience.
+%
 %    fileStreams is a cell array, containing a series of cell arrays, each
 %       containing a set of filepaths representing one stream of data. The
 %       first stream will be used as the "base" files, and the rest of the
@@ -69,7 +85,7 @@ fprintf('Parsing tag data from files...\n');
 tagData = {};
 for n = 1:length(fileStreams)
     tagData{n} = struct('file', {}, 'tagData', {});
-    fprintf('\tParsing stream %d:', n)
+    fprintf('\tParsing stream #%d:', n)
     for k = 1:length(fileStreams{n})
         fprintf(' %d', k)
         file = fileStreams{n}{k};
@@ -171,6 +187,8 @@ for k = 1:length(tags{1})
             matches(matchIdx).baseOverlap = baseOverlap;
             matches(matchIdx).matchOverlap = matchOverlap;
             matches(matchIdx).sampleRateRatio = (matchOverlap(2)-matchOverlap(1))/(baseOverlap(2)-baseOverlap(1));
+            matches(matchIdx).baseFileLength = baseTag.fileLength;
+            matches(matchIdx).matchFileLength = matchTag.fileLength;
 
             syncList(baseIdx).matches{m} = matches;
         end
@@ -324,78 +342,6 @@ end
 
 function tagData = getTagData(filePath, allTagData)
 tagData = allTagData(strcmp({allTagData.file}, filePath)).tagData;
-
-function [oA, oB] = overlapSegments(sA, sB, rA, rB, roundOutputs)
-% rA = reference segment A
-% rB = reference segment B
-% sA = segment to overlap A
-% sB = segment to overlap B
-% oA = overlapping part of segment A
-% oB = overlapping part of segment B
-% roundOutputs = boolean flag - round outputs to integer? Default true
-
-if ~exist('roundOutputs', 'var')
-    roundOutputs = true;
-end
-
-if ~exist('rA', 'var')
-    rA = [0, 1];
-end
-if ~exist('rB', 'var')
-    rB = [0, 1];
-end
-
-% Check validity of inputs
-for segC = {rA, rB, sA, sB}
-    seg = segC{1};
-    assert(length(seg) == 2, 'Error, all inputs to overlapSegments must have length 2');
-    assert(seg(1) <= seg(2), 'Error, all inputs to overlapSegments must have second value greater than the first');
-end
-
-% Scale conversion between coordinate system B and A
-slopeBtoA = (rA(1) - rA(2))/(rB(1) - rB(2));
-slopeAtoB = (rB(1) - rB(2))/(rA(1) - rA(2));
-
-% Function to map numbers in coordinate system B to coordinate system A
-mapBtoA = @(nB)slopeBtoA*(nB - rB(1)) + rA(1);
-mapAtoB = @(nA)slopeAtoB*(nA - rA(1)) + rB(1);
-
-% Segment B mapped to A coordinate system - "sB in A"
-sBinA = mapBtoA(sB);
-
-if sA(2) < sBinA(1) || sBinA(2) < sA(1)
-    % |---A---| 
-    %             |---B---|
-    %          OR
-    %             |---A---| 
-    %  |---B---|
-    oA = [];
-elseif sA(1) <= sBinA(1) && sA(2) <= sBinA(2)
-    % |---A---| 
-    %       |---B---|
-    oA = [sBinA(1), sA(2)];
-elseif sBinA(1) <= sA(1) && sBinA(2) <= sA(2)
-    %       |---A---| 
-    %  |---B---|
-    oA = [sA(1), sBinA(2)];
-elseif sA(1) >= sBinA(1) && sA(2) <= sBinA(2)
-    %     |---A---| 
-    %   |-----B-----|
-    oA = sA;
-elseif sBinA(1) >= sA(1) && sBinA(2) <= sA(2)
-    %   |-----A-----| 
-    %     |---B---|
-    oA = sBinA;
-else
-    error('Failed to identify segment overlap!');
-end
-
-oB = mapAtoB(oA);
-
-if roundOutputs
-    oA = round(oA);
-    oB = round(oB);
-end
 
 function ext = getExtension(path)
 [~, ~, ext] = fileparts(path);
