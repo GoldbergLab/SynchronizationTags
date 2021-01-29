@@ -30,7 +30,14 @@ if ~exist('showPlot', 'var')
 end
 
 %% Read .dat file
-[tagData, info] = egl_AA_daq(facqG);
+[rawTagData, info] = egl_AA_daq(datFile);
+
+% Find two levels
+[~, vals] = kmeans(rawTagData, 2);
+% Find threshold
+threshold = mean(vals);
+% Convert to logical
+tagData = rawTagData > threshold;
 
 %% Plot data
 if showPlot
