@@ -1,4 +1,4 @@
-function syncList = syncDoricToAcqGui(doricRootDir, acqGuiRootDir, matchDirection, nBits, plotSync)
+function syncList = syncDoricToAcqGui(doricRootDir, acqGuiRootDir, matchDirection, chanSuffix, nBits, plotSync)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % syncDoricToAcqGui: Create a synchronization list to match Doric 
 %   fiberphotometry files and acquisitionGui files together.
@@ -17,6 +17,9 @@ function syncList = syncDoricToAcqGui(doricRootDir, acqGuiRootDir, matchDirectio
 %    matchDirection is an optional char array indicating whether to match
 %       Doric to acquisitionGui or acquisitionGui to Doric. One of 
 %       {'DoricToAcqGui', 'AcqGuiToDoric'}. Default is 'DoricToAcqGui'
+%    chanSuffix is a char array indicating the text that occurs right
+%       before the file extension that indicates the correct channel to 
+%       choose for sync tags. For example, 'chan3' (which is the default)
 %    nBits is an optional # of bits to expect in the tags, which can
 %       increase reliability of tag IDs, but is generally not necessary. 
 %       Default is NaN, meaning any # of bits will be allowed.
@@ -45,6 +48,9 @@ function syncList = syncDoricToAcqGui(doricRootDir, acqGuiRootDir, matchDirectio
 if ~exist('matchDirection', 'var')
     matchDirection = 'AcqGuiToDoric';    
 end
+if ~exist('chanSuffix', 'var')
+    chanSuffix = 'chan3';
+end
 if ~exist('nBits', 'var')
     nBits = NaN;
 end
@@ -54,7 +60,7 @@ end
 
 % Find acqGui .dat files and Doric .csv files
 fprintf('Finding acqGui .dat files...\n');
-datFiles = findFilesByRegex(acqGuiRootDir, '.*\.[dD][aA][tT]', false, false);
+datFiles = findFilesByRegex(acqGuiRootDir, ['.*', chanSuffix, '\.[dD][aA][tT]'], false, false);
 fprintf('...done. Found %d .dat files.\n', length(datFiles));
 fprintf('Finding Doric .csv files...\n');
 csvFiles = findFilesByRegex(doricRootDir, '.*\.[cC][sS][vV]', false, false);
