@@ -10,6 +10,7 @@
 		<Property Name="server.vi.callsEnabled" Type="Bool">true</Property>
 		<Property Name="server.vi.propertiesEnabled" Type="Bool">true</Property>
 		<Property Name="specify.custom.address" Type="Bool">false</Property>
+		<Item Name="GenerateValidTagSettings.vi" Type="VI" URL="../GenerateValidTagSettings.vi"/>
 		<Item Name="TagSync.vi" Type="VI" URL="../TagSync.vi"/>
 		<Item Name="Validate Tag Settings.vi" Type="VI" URL="../Validate Tag Settings.vi"/>
 		<Item Name="Dependencies" Type="Dependencies">
