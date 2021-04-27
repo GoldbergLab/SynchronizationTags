@@ -45,7 +45,7 @@ function syncList = syncDoricToAcqGui(doricRootDir, acqGuiRootDir, matchDirectio
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-if ~exist('matchDirection', 'var')
+if ~exist('matchDirection', 'var') || isempty(matchDirection)
     matchDirection = 'AcqGuiToDoric';    
 end
 if ~exist('chanSuffix', 'var')
