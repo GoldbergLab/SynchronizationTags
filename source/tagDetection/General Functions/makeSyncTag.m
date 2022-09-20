@@ -1,5 +1,4 @@
-function tagData = makeSyncTag(tagNumbers, pulseWidth, taggingPeriod, tagMarkerDuration, integerBitSize, plotData, timingJitter, makeDeletion)
-
+function tagData = makeSyncTag(tagNumbers, pulseWidth, taggingPeriod, tagMarkerDuration, integerBitSize, plotData, timingJitter, makeDeletion, mirrored)
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % makeSyncTag: A testing function to generate synchronization tags for 
 %    testing the function findTags
@@ -36,6 +35,9 @@ function tagData = makeSyncTag(tagNumbers, pulseWidth, taggingPeriod, tagMarkerD
 %    makeDeletion is an optional boolean flag indicating whether or not to
 %       randomly delete a section of the output tag data, to simulate real
 %       world loss of data.
+%    mirrored is an optional boolean flag indicating whether or not the
+%       tags should be mirrored; an older version of this project used
+%       unmirrored tags. Default is true.
 %
 %   makeSyncTag is a utility function that synthesizes simulated tag data
 %   that can be used to test the tagging functionality, primarly by feeding
@@ -51,16 +53,24 @@ function tagData = makeSyncTag(tagNumbers, pulseWidth, taggingPeriod, tagMarkerD
 % Real_email = regexprep(Email,{'=','*'},{'@','.'})
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-if ~exist('timingJitter', 'var')
+if ~exist('timingJitter', 'var') || isempty(timingJitter)
     timingJitter = 0;
 end
 
-if ~exist('makeDeletion', 'var')
+if ~exist('makeDeletion', 'var') || isempty(makeDeletion)
     makeDeletion = false;
 end
 
-if ~exist('plotData', 'var')
+if ~exist('plotData', 'var') || isempty(plotData)
     plotData = true;
+end
+
+if ~exist('integerBitSize', 'var') || isempty(integerBitSize)
+    integerBitSize = ceil(log2(max(tagNumbers)))+1;
+end
+
+if ~exist('mirrored', 'var') || isempty(mirrored)
+    mirrored = true;
 end
 
 if (2^integerBitSize < max(tagNumbers))
@@ -86,7 +96,11 @@ for j = 1:length(tagNumbers)
             tagBits = [tagBits, getOffBit(pulseWidth, timingJitter)];
         end
     end
-    currentTagData = [currentTagData, tagBits, flip(tagBits), tagEnd];
+    if mirrored
+        currentTagData = [currentTagData, tagBits, flip(tagBits), tagEnd];
+    else
+        currentTagData = [currentTagData, tagBits, tagEnd];
+    end
     tagData = [tagData, currentTagData];
     if (j < length(tagNumbers))
         tagData = [tagData, getPulse(pulseWidth*(taggingPeriod - floor(length(currentTagData)/pulseWidth)), timingJitter)];
